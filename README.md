@@ -32,9 +32,14 @@ Cloudflare Access checks the person's email with a one-time code, and the hub is
 cannot be reached, the page falls back to `apartment-hunt/data.json`, a snapshot taken when the site was last
 published, and says so in the header.
 
-To refresh that fallback snapshot, ask Claude to export the hub's data and run
-`python3 scripts/build_data.py <that-folder>`, then commit and push. If the page itself changed, also export the
-artifact's HTML and run `python3 scripts/patch_page.py <exported.html>`.
+The fallback snapshot refreshes itself every night at 3:30: `launchd/com.toner.site-snapshot.plist` runs
+`scripts/refresh_snapshot.py`, which reads the full state from the hub on localhost, rewrites `data.json`, and commits
+and pushes only when something changed. Its log is `~/Library/Logs/tonertechsolutions-snapshot.log`. To install the job
+on a new Mac: copy the plist to `~/Library/LaunchAgents/` and run `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.toner.site-snapshot.plist`.
+To refresh by hand: `python3 scripts/refresh_snapshot.py`.
+
+If the page itself changes on claude.ai, export the artifact's HTML and run `python3 scripts/patch_page.py <exported.html>`.
+`scripts/build_data.py` is the older way to build the snapshot from an ArtifactData export; the hub is the source now.
 
 ## Add another page
 
