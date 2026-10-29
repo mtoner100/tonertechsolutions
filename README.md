@@ -8,9 +8,9 @@ A static site that publishes pages built with Claude. Hosted on GitHub Pages fro
 |---|---|
 | `index.html` | The gallery home page. Each published page is one card. |
 | `assets/` | Shared stylesheet and favicon. |
-| `apartment-hunt/index.html` | The Newport Apartment Hunt page, patched to run read-only. |
-| `apartment-hunt/data.json` | A snapshot of the hunt's database: listings, requests, summary, activity. |
-| `apartment-hunt/runtime.js` | A stand-in for Claude's artifact runtime that serves `data.json` and refuses writes. |
+| `apartment-hunt/index.html` | The Newport Apartment Hunt page, patched to talk to the hub through the tunnel. |
+| `apartment-hunt/data.json` | Fallback snapshot of the hunt's database, used only when the hub is unreachable. |
+| `apartment-hunt/runtime.js` | Points the page at the hub, handles sign-in, and loads `data.json` as a fallback. |
 | `scripts/build_data.py` | Rebuilds `data.json` from a database export. |
 | `scripts/patch_page.py` | Rebuilds `apartment-hunt/index.html` from a fresh export of the artifact. |
 | `CNAME` | The custom domain GitHub Pages answers on. |
@@ -24,15 +24,17 @@ python3 -m http.server 8000 --bind 127.0.0.1
 
 Then open <http://127.0.0.1:8000/>.
 
-## Refresh the apartment hunt
+## How the apartment hunt page works
 
-The data is a snapshot, so the public page only changes when it is rebuilt. Ask Claude to:
+The page is the same dashboard that runs on Matt's Mac, pointed at the hub's public address,
+`hub.tonertechsolutions.com`, which a Cloudflare Tunnel connects to the hub. Anyone can read. Editing needs a sign-in:
+Cloudflare Access checks the person's email with a one-time code, and the hub issues a session cookie. If the hub
+cannot be reached, the page falls back to `apartment-hunt/data.json`, a snapshot taken when the site was last
+published, and says so in the header.
 
-1. Export the artifact's `listings`, `requests` and `meta` collections to a folder.
-2. Run `python3 scripts/build_data.py <that-folder>`.
-3. Commit and push.
-
-If the page itself changed on claude.ai, also export the artifact's HTML and run `python3 scripts/patch_page.py <exported.html>`.
+To refresh that fallback snapshot, ask Claude to export the hub's data and run
+`python3 scripts/build_data.py <that-folder>`, then commit and push. If the page itself changed, also export the
+artifact's HTML and run `python3 scripts/patch_page.py <exported.html>`.
 
 ## Add another page
 

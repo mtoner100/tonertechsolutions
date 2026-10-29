@@ -1,4 +1,4 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style><title>Newport Apartment Hunt</title><meta name="description" content="A read-only snapshot of the Newport and Middletown apartment search Matt Toner built with Claude."><link rel="icon" href="../assets/favicon.svg" type="image/svg+xml"></head><body>
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style><title>Newport Apartment Hunt</title><meta name="description" content="The Newport and Middletown apartment search Matt Toner runs with Claude agents: live listings, board, map and tours."><link rel="icon" href="../assets/favicon.svg" type="image/svg+xml"></head><body>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
 <style>
@@ -211,6 +211,7 @@ table.facts td:first-child{color:var(--muted);white-space:nowrap;width:120px}
 .desc{white-space:pre-wrap;font-size:13.5px;max-height:160px;overflow:hidden;position:relative}
 .desc.open{max-height:none}
 .reasons{font-size:12.5px;color:var(--muted);display:flex;flex-wrap:wrap;gap:4px 10px}
+.auth{display:inline-flex;align-items:center;gap:8px;font-size:12px;color:var(--muted);white-space:nowrap}
 .toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:9px 14px;border-radius:9px;z-index:30;font-size:13px;box-shadow:var(--shadow)}
 .inline-form{display:flex;gap:6px;flex-wrap:wrap;align-items:end}
 .inline-form>div{flex:1 1 140px}
@@ -223,13 +224,14 @@ table.facts td:first-child{color:var(--muted);white-space:nowrap;width:120px}
 <header class="top">
   <div class="top-row">
     <div class="brand"><h1>Newport Apartment Hunt</h1><span class="sub">4+ beds · under $4,500 · parking · storage · 12-month lease</span></div>
-    <a class="btn small quiet" href="../" style="margin-left:auto">tonertechsolutions.com</a><div class="status" id="status" style="margin-left:0"><span class="dot"></span><span id="status-text">Loading…</span><button class="btn small" id="sync-btn" hidden>Sync now</button></div>
+    <a class="btn small quiet" href="../" style="margin-left:auto">tonertechsolutions.com</a><div class="status" id="status" style="margin-left:0"><span class="dot"></span><span id="status-text">Loading…</span><button class="btn small" id="sync-btn" hidden>Sync now</button></div><span class="auth" id="auth"></span>
   </div>
   <nav class="tabs" role="tablist" id="tabs">
     <button role="tab" data-view="top" aria-selected="true">Top 10</button>
     <button role="tab" data-view="board">Board<span class="count" id="count-board">0</span></button>
     <button role="tab" data-view="map">Map</button>
     <button role="tab" data-view="calendar">Tours<span class="count" id="count-tours">0</span></button>
+    <button role="tab" data-view="add" id="tab-add" hidden>Add a listing</button>
     <button role="tab" data-view="activity">Agents</button>
   </nav>
 </header>
@@ -264,7 +266,7 @@ table.facts td:first-child{color:var(--muted);white-space:nowrap;width:120px}
   </section>
 
   <section class="view" id="view-board">
-    <div class="toolbar"><h2>Your board</h2><span class="muted small">A read-only view of the board. Click a card to see who leads it, action items, notes and tours.</span>
+    <div class="toolbar"><h2>Your board</h2><span class="muted small" id="board-hint">Drag cards between lanes; drop one on Passed on to pass, drag it back out to revive it. Click a card to set who leads it, action items, notes and tours.</span>
       <div class="seg" id="board-owner"><button aria-pressed="true" data-o="all">Everyone</button><button data-o="Matt">Matt</button><button data-o="Jack">Jack</button><button data-o="Ben">Ben</button><button data-o="none">No lead</button></div>
     </div>
     <div class="board" id="board"></div>
@@ -314,7 +316,9 @@ const LANES = ['watchlist','pursuing','touring','applying','lease'];
 const LANE_LABELS = {watchlist:'Watchlist', pursuing:'Pursuing', touring:'Touring', applying:'Applying', lease:'Lease'};
 const DEFAULT_ACTIONS = [['contacted','Contacted the landlord or agent'],['tour_scheduled','Tour scheduled'],['toured','Toured the place'],['applied','Application sent'],['lease_reviewed','Lease reviewed']];
 const USER_FIELDS = ['lane','lane_at','actions','custom_actions','notes','tours','passed','passed_at','passed_reason','user_note','user_rev','pinned','feedback','owner'];
-const HUB = !!(window.__HUB__ && window.__HUB__.local);
+const HUB = !!(window.__HUB__ && (window.__HUB__.local || window.__HUB__.remote));
+const HUB_REMOTE = !!(window.__HUB__ && window.__HUB__.remote);
+const HUB_BASE = (window.__HUB__ && window.__HUB__.base) || '';
 const OWNERS = ['Matt','Jack','Ben'];
 function ownerBadge(d, withName){ const o = d.owner; const cls = o ? o[0].toLowerCase() : 'none'; return '<span class="owner ' + cls + '" title="' + esc(o ? 'Lead: ' + o : 'No lead yet') + '">' + (o ? esc(o[0]) : '?') + '</span>' + (withName && o ? ' ' + esc(o) : ''); }
 function setOwner(id, name){ return edit(id, {owner: name || null}); }
@@ -338,7 +342,7 @@ function pad(n){ return String(n).padStart(2,'0'); }
 function localIso(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes()); }
 function parseLocal(s){ if(!s) return null; const d = new Date(s); return isNaN(d) ? null : d; }
 function fmtWhen(s){ const d = parseLocal(s); if(!d) return s || ''; return d.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'}) + ', ' + d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}); }
-function snapshotDate(){ const at = window.__SNAPSHOT_AT__ || (state.meta && state.meta.updated_at); try { return new Date(at).toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'}); } catch(e){ return 'today'; } }
+function snapshotDate(){ const at = window.__SNAPSHOT_AT__ || (state.meta && state.meta.updated_at); try { return new Date(at).toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'}); } catch(e){ return 'earlier'; } }
 function ago(iso){ if(!iso) return 'never'; const ms = Date.now() - new Date(iso).getTime(); if(isNaN(ms)) return iso; const m = Math.round(ms/60000); if(m < 1) return 'just now'; if(m < 60) return m+' min ago'; const h = Math.round(m/60); if(h < 36) return h+' h ago'; return Math.round(h/24)+' d ago'; }
 function title(d){ let t = d.address || d.request_url || d.id; if(d.unit) t += ' #' + d.unit; return t; }
 function pick(obj, keys){ const o = {}; keys.forEach(k => { if(obj[k] !== undefined) o[k] = obj[k]; }); return o; }
@@ -359,9 +363,9 @@ function tours(){ const out = []; activeListings().forEach(d => (d.tours||[]).fo
 const hubBackend = {
   name: 'hub',
   async init(){ await this.poll(true); setInterval(() => this.poll(false), 15000); },
-  async poll(first){ try { const r = await fetch('/api/state?since=' + (first ? 0 : state.syncRev)); const j = await r.json(); applyPull(j, true); setStatus('ok', 'Live on this Mac · ' + ago(j.meta.updated_at)); } catch(e){ setStatus('bad', 'Hub not reachable: ' + e.message); } },
-  async saveUser(id, user){ const r = await fetch('/api/user', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id, user})}); const j = await r.json(); if(j.listing) state.listings.set(id, j.listing); return j.ok; },
-  async addRequest(url, note){ const r = await fetch('/api/request', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({url, note})}); const j = await r.json(); if(j.listing) state.listings.set(j.listing.id, j.listing); await this.poll(false); return j; },
+  async poll(first){ try { const r = await fetch(HUB_BASE + '/api/state?since=' + (first ? 0 : state.syncRev), {credentials: 'include'}); if(!r.ok) throw new Error('hub answered ' + r.status); const j = await r.json(); this.offline = false; applyPull(j, true); setStatus('ok', (HUB_REMOTE ? 'Live · data ' : 'Live on this Mac · ') + ago(j.meta.updated_at)); } catch(e){ if(HUB_REMOTE && window.__SNAPSHOT__ && !state.listings.size){ try { const snap = await window.__SNAPSHOT__(); this.offline = true; applyPull(snap, true); setStatus('warn', 'Snapshot from ' + snapshotDate() + ' · the hub is offline'); return; } catch(e2){} } setStatus(this.offline ? 'warn' : 'bad', HUB_REMOTE ? 'Hub not reachable right now' : 'Hub not reachable: ' + e.message); } },
+  async saveUser(id, user){ if(window.__READONLY__){ if(window.__requireSignIn) window.__requireSignIn(); return false; } const r = await fetch(HUB_BASE + '/api/user', {method:'POST', credentials: 'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({id, user})}); if(r.status === 401){ if(window.__signedOut) window.__signedOut(); toast('Your sign-in expired; sign in again'); return false; } const j = await r.json(); if(j.listing) state.listings.set(id, j.listing); return j.ok; },
+  async addRequest(url, note){ if(window.__READONLY__) throw new Error('sign in to add a listing'); const r = await fetch(HUB_BASE + '/api/request', {method:'POST', credentials: 'include', headers:{'Content-Type':'application/json'}, body: JSON.stringify({url, note})}); if(r.status === 401){ if(window.__signedOut) window.__signedOut(); throw new Error('your sign-in expired'); } const j = await r.json(); if(!r.ok) throw new Error(j.error || ('hub answered ' + r.status)); if(j.listing) state.listings.set(j.listing.id, j.listing); await this.poll(false); return j; },
   canSync: false
 };
 
@@ -382,8 +386,8 @@ const dbBackend = {
     window.claude.use('permissions').then(p => { if(!p){ state.diag.permission = 'permissions capability absent'; render(); return; } Promise.resolve(p.state('mcp:host:apartments')).then(s => { state.diag.permission = typeof s === 'string' ? s : JSON.stringify(s); render(); }, e => { state.diag.permission = 'state() rejected: ' + (e.code||e.message||e); render(); }); }).catch(() => {});
     updateStatus();
   },
-  async saveUser(id, user){ if(window.__READONLY__){ toast('This is a read-only copy of the hunt'); return false; } const cur = state.listings.get(id) || {id}; const merged = {...cur, ...user, dirty: true}; state.listings.set(id, merged); await this.db.doc('listings/' + id).set(merged); schedulePush(); return true; },
-  async addRequest(url, note){ if(window.__READONLY__) throw new Error('this is a read-only copy of the hunt'); const id = 'r' + uid().slice(1); const req = {id, url, note: note || null, added_at: new Date().toISOString().slice(0,19), status: 'new', synced: false}; state.requests.set(id, req); await this.db.doc('requests/' + id).set(req); schedulePush(); return {request_id: id}; },
+  async saveUser(id, user){ const cur = state.listings.get(id) || {id}; const merged = {...cur, ...user, dirty: true}; state.listings.set(id, merged); await this.db.doc('listings/' + id).set(merged); schedulePush(); return true; },
+  async addRequest(url, note){ const id = 'r' + uid().slice(1); const req = {id, url, note: note || null, added_at: new Date().toISOString().slice(0,19), status: 'new', synced: false}; state.requests.set(id, req); await this.db.doc('requests/' + id).set(req); schedulePush(); return {request_id: id}; },
   get canSync(){ return !!this.mcp; },
   async sync(){
     if(!this.mcp || state.syncing) return; state.syncing = true; updateStatus('Syncing with your Mac…'); state.diag.lastAttempt = new Date().toISOString();
@@ -439,7 +443,6 @@ function updateStatus(msg){
   if(HUB) return;
   if(!state.dbReady) return;
   if(state.mcpReady) setStatus('ok', state.lastSync ? 'Synced with your Mac ' + ago(state.lastSync) : 'Ready to sync with your Mac');
-  else if(window.__READONLY__) setStatus('ok', 'Snapshot from ' + snapshotDate() + ' · read-only');
   else setStatus('warn', (state.meta.updated_at ? 'Data as of ' + ago(state.meta.updated_at) : 'No data yet') + ' · open in the Claude desktop app on your Mac to sync');
 }
 
@@ -635,7 +638,7 @@ function renderActivity(){
   const stats = [['Matches in play', c.active ?? '–'], ['Tracked', c.tracked ?? '–'], ['Filtered out', c.dropped ?? '–'], ['On the board', Object.values(lanes).reduce((a,b) => a+b, 0)], ['Links waiting', m.requests_open ?? '–'],
     ['Last site scan', ago(m.last_scout)], ['Last email check', ago(m.last_watch)], ['AI spend this month', m.ai_cost_month_usd != null ? '$' + m.ai_cost_month_usd : '–'], ['Web searches this month', m.tavily_month ?? '–'], ['Zillow', m.zillow ? 'blocked, backing off' : 'ok']];
   const dg = state.diag || {};
-  const conn = window.__READONLY__ ? 'This is a public, read-only snapshot taken ' + snapshotDate() + '. The live hunt syncs on Matt\'s Mac through the Claude desktop app.' : HUB ? 'Live on this Mac; no sync needed.' : ['Sync capability: ' + (dg.mcp || 'waiting'), 'Servers the viewer exposes: ' + ((dg.servers||[]).join('; ') || 'none listed yet'), 'Permission for host:apartments: ' + (dg.permission || 'unknown'), 'Last sync attempt: ' + (dg.lastAttempt ? ago(dg.lastAttempt) : 'none'), 'Last sync result: ' + (dg.lastError || (state.lastSync ? 'ok' : 'none yet')), 'Data revision: ' + state.syncRev].join('\n');
+  const conn = HUB_REMOTE ? (state.backend && state.backend.offline ? 'The hub on Matt\'s Mac is offline; this is the snapshot taken ' + snapshotDate() + '.' : 'Live: this page talks to the hub on Matt\'s Mac through a Cloudflare Tunnel. Edits reach the agents at once.') : HUB ? 'Live on this Mac; no sync needed.' : ['Sync capability: ' + (dg.mcp || 'waiting'), 'Servers the viewer exposes: ' + ((dg.servers||[]).join('; ') || 'none listed yet'), 'Permission for host:apartments: ' + (dg.permission || 'unknown'), 'Last sync attempt: ' + (dg.lastAttempt ? ago(dg.lastAttempt) : 'none'), 'Last sync result: ' + (dg.lastError || (state.lastSync ? 'ok' : 'none yet')), 'Data revision: ' + state.syncRev].join('\n');
   $('stats').innerHTML = stats.map(([k,v]) => '<div class="stat"><div class="k">' + esc(k) + '</div><div class="v">' + esc(v) + '</div></div>').join('') + '<div class="stat" style="grid-column:1/-1"><div class="k">Connection to your Mac</div><div style="white-space:pre-wrap;font-size:13px;margin-top:4px">' + esc(conn) + '</div></div>';
   $('feed').innerHTML = (state.activity || []).length ? state.activity.map(a => '<div><time>' + esc((a.at||'').replace('T',' ').slice(5,16)) + '</time><span class="kind">' + esc(a.kind) + '</span><span>' + esc(a.text) + '</span></div>').join('') : '<div class="muted">No activity yet.</div>';
 }
@@ -800,7 +803,7 @@ document.addEventListener('keydown', ev => { if(ev.key === 'Escape' && state.sel
   if(location.hash && /^#(top|board|map|calendar|add|activity)$/.test(location.hash)) showView(location.hash.slice(1));
   render();
   state.backend = HUB ? hubBackend : dbBackend;
-  if(!HUB && !(window.claude && window.claude.use)){ setStatus('warn', 'The snapshot runtime did not load'); return; }
+  if(!HUB && !(window.claude && window.claude.use)){ setStatus('warn', 'The page runtime did not load'); return; }
   await state.backend.init();
 })();
 })();
