@@ -6,9 +6,9 @@
   <key>ProgramArguments</key>
   <array>
     <string>/usr/bin/python3</string>
-    <string>/Users/matttoner/Desktop/Claude/Matt Toner AI/scripts/refresh_snapshot.py</string>
+    <string>/Users/matttoner/agents/tonertechsolutions-site/scripts/refresh_snapshot.py</string>
   </array>
-  <key>WorkingDirectory</key><string>/Users/matttoner/Desktop/Claude/Matt Toner AI</string>
+  <key>WorkingDirectory</key><string>/Users/matttoner/agents/tonertechsolutions-site</string>
   <key>EnvironmentVariables</key>
   <dict><key>PATH</key><string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string><key>GIT_TERMINAL_PROMPT</key><string>0</string></dict>
   <key>StartCalendarInterval</key>

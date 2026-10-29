@@ -34,8 +34,12 @@ published, and says so in the header.
 
 The fallback snapshot refreshes itself every night at 3:30: `launchd/com.toner.site-snapshot.plist` runs
 `scripts/refresh_snapshot.py`, which reads the full state from the hub on localhost, rewrites `data.json`, and commits
-and pushes only when something changed. Its log is `~/Library/Logs/tonertechsolutions-snapshot.log`. To install the job
-on a new Mac: copy the plist to `~/Library/LaunchAgents/` and run `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.toner.site-snapshot.plist`.
+and pushes only when something changed. Its log is `~/Library/Logs/tonertechsolutions-snapshot.log`.
+
+macOS does not let background jobs read the Desktop folder, so the job works in its own clone of this repository at
+`~/agents/tonertechsolutions-site` and pushes from there. Run `git pull` in this folder before editing, to pick up the
+nightly snapshot commits. To install the job on a new Mac: clone the repository to that path, copy the plist to
+`~/Library/LaunchAgents/` and run `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.toner.site-snapshot.plist`.
 To refresh by hand: `python3 scripts/refresh_snapshot.py`.
 
 If the page itself changes on claude.ai, export the artifact's HTML and run `python3 scripts/patch_page.py <exported.html>`.
