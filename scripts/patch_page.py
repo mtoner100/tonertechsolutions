@@ -69,7 +69,7 @@ def main():
 
     # A way back to the gallery.
     rep('<div class="status" id="status">',
-        '<a class="btn small quiet" href="../" style="margin-left:auto">matttoner.ai</a>'
+        '<a class="btn small quiet" href="../" style="margin-left:auto">tonertechsolutions.com</a>'
         '<div class="status" id="status" style="margin-left:0">')
 
     with open(dst, "w", encoding="utf-8") as fh:

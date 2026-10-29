@@ -1,4 +1,4 @@
-# matttoner.ai
+# tonertechsolutions.com
 
 A static site that publishes pages built with Claude. Hosted on GitHub Pages from this repository; nothing here needs a build step or a server.
 
@@ -40,7 +40,7 @@ If the page itself changed on claude.ai, also export the artifact's HTML and run
 2. Add a card for it in `index.html`.
 3. Commit and push.
 
-## DNS for matttoner.ai
+## DNS for tonertechsolutions.com
 
 Set these at the registrar after buying the domain.
 
@@ -52,4 +52,4 @@ Set these at the registrar after buying the domain.
 | A | `@` | `185.199.111.153` |
 | CNAME | `www` | `mtoner100.github.io` |
 
-Then in the repository's Settings → Pages set the custom domain to `matttoner.ai` and turn on Enforce HTTPS once the check passes.
+Then in the repository's Settings → Pages set the custom domain to `tonertechsolutions.com` and turn on Enforce HTTPS once the check passes.
