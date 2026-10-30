@@ -45,8 +45,8 @@ def main():
     rep('<div class="status" id="status">',
         '<a class="btn small quiet" href="../" style="margin-left:auto">tonertechsolutions.com</a>'
         '<div class="status" id="status" style="margin-left:0">')
-    rep('<button class="btn small" id="sync-btn" hidden>Sync now</button></div>',
-        '<button class="btn small" id="sync-btn" hidden>Sync now</button></div><span class="auth" id="auth"></span>')
+    rep('id="build" title="Page version. If a newer one was announced, reload the page."></span></div>',
+        'id="build" title="Page version. If a newer one was announced, reload the page."></span></div><span class="auth" id="auth"></span>')
 
     # the Add tab and the board hint show up for signed-in editors
     rep('<button role="tab" data-view="add">Add a listing</button>',
