@@ -15,7 +15,6 @@ import subprocess
 import sys
 import tempfile
 import time
-import urllib.request
 from datetime import datetime, timezone
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -41,9 +40,10 @@ def git(*args, check=True):
 
 
 def served_build():
-    req = urllib.request.Request(f"{SITE_URL}?nocache={int(time.time())}", headers={"Cache-Control": "no-cache", "Pragma": "no-cache"})
-    with urllib.request.urlopen(req, timeout=30) as r:
-        m = re.search(r"const BUILD = '(v\d+)'", r.read().decode("utf-8", "replace"))
+    # curl, not urllib: the system Python has no certificate bundle for HTTPS
+    r = subprocess.run(["curl", "-s", "-m", "30", "-H", "Cache-Control: no-cache", f"{SITE_URL}?nocache={int(time.time())}"],
+                       capture_output=True, text=True, check=True)
+    m = re.search(r"const BUILD = '(v\d+)'", r.stdout)
     return m.group(1) if m else None
 
 
