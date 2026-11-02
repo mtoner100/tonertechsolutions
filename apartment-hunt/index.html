@@ -80,6 +80,11 @@ main{max-width:1180px;margin:0 auto;padding-block:18px 60px;padding-left:max(16p
 .rankpill small{font-size:10.5px;color:var(--muted);font-weight:600;letter-spacing:.03em;margin-top:3px;font-family:var(--body)}
 .addr{font-family:var(--display);font-weight:700;font-size:18px;line-height:1.25;overflow-wrap:anywhere}
 .addr .city{font-weight:500;color:var(--muted);font-size:13px;font-family:var(--body)}
+a.addrlink{color:inherit;text-decoration:underline;text-decoration-color:var(--line);text-decoration-thickness:1.5px;text-underline-offset:3px}
+a.addrlink:hover{color:var(--accent);text-decoration-color:currentColor}
+.newtag{display:inline-block;vertical-align:3px;margin-left:6px;padding:2px 7px;border-radius:999px;background:var(--accent);color:#fff;font:700 10.5px/1.3 var(--body);letter-spacing:.06em;text-transform:uppercase}
+.market{font-size:13px;margin-top:4px}
+.drawer .market{margin:2px 0 6px}
 .price{font-size:18px;font-weight:600;white-space:nowrap;margin-left:auto;text-align:right;line-height:1.2}
 .price small{font-size:12px;color:var(--muted);font-weight:400}
 .specs{color:var(--muted);font-size:13.5px;line-height:1.5}
@@ -313,7 +318,7 @@ table.facts td:first-child{color:var(--muted);white-space:nowrap;width:120px}
 <script>
 (function(){
 'use strict';
-const BUILD = 'v30';  // bump on every publish; the page compares it with meta/build in the shared db and offers a reload when behind
+const BUILD = 'v31';  // bump on every publish; the page compares it with meta/build in the shared db and offers a reload when behind
 const LANES = ['watchlist','pursuing','touring','applying','lease'];
 const LANE_LABELS = {watchlist:'Watchlist', pursuing:'Pursuing', touring:'Touring', applying:'Applying', lease:'Lease'};
 const DEFAULT_ACTIONS = [['contacted','Contacted the landlord or agent'],['tour_scheduled','Tour scheduled'],['toured','Toured the place'],['applied','Application sent'],['lease_reviewed','Lease reviewed']];
@@ -349,6 +354,25 @@ function parseLocal(s){ if(!s) return null; const d = new Date(s); return isNaN(
 function fmtWhen(s){ const d = parseLocal(s); if(!d) return s || ''; return d.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'}) + ', ' + d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'}); }
 function snapshotDate(){ const at = window.__SNAPSHOT_AT__ || (state.meta && state.meta.updated_at); try { return new Date(at).toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'}); } catch(e){ return 'earlier'; } }
 function ago(iso){ if(!iso) return 'never'; const ms = Date.now() - new Date(iso).getTime(); if(isNaN(ms)) return iso; const m = Math.round(ms/60000); if(m < 1) return 'just now'; if(m < 60) return m+' min ago'; const h = Math.round(m/60); if(h < 36) return h+' h ago'; return Math.round(h/24)+' d ago'; }
+const NEW_HOURS = 72;  // the New tag: found by the agents in the last three days
+function isNew(d){ const t = Date.parse(d.first_seen || ''); return !isNaN(t) && Date.now() - t < NEW_HOURS * 3600e3; }
+function newTag(d){ return isNew(d) ? ' <span class="newtag" title="Found ' + esc(fmtDay(d.first_seen)) + '">New</span>' : ''; }
+function fmtDay(s){ const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || ''); if(!m) return s || ''; return new Date(+m[1], +m[2] - 1, +m[3]).toLocaleDateString(undefined, {month: 'short', day: 'numeric'}); }
+function daysSince(s){ const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s || ''); if(!m) return null; const then = new Date(+m[1], +m[2] - 1, +m[3]); const now = new Date(); now.setHours(0, 0, 0, 0); return Math.max(0, Math.round((now - then) / 864e5)); }
+function daysWord(n){ return n + ' day' + (n === 1 ? '' : 's'); }
+// How long the house has been up for rent: Zillow's days on market, fixed to a date by the hub (listed_on).
+function marketLine(d){
+  const n = daysSince(d.listed_on);
+  if(n != null) return '<div class="market" title="Zillow\'s days on market, counted from ' + esc(fmtDay(d.listed_on)) + '"><b>' + (n === 0 ? 'Listed today' : 'On the market ' + daysWord(n)) + '</b>' + (n === 0 ? '' : '<span class="muted"> · listed ' + esc(fmtDay(d.listed_on)) + '</span>') + '</div>';
+  const f = daysSince(d.first_seen);
+  return f != null ? '<div class="market muted" title="No site publishes when this one was listed">Listing date not published · found ' + (f === 0 ? 'today' : daysWord(f) + ' ago') + '</div>' : '';
+}
+// The property name links to the house's own listing: Zillow first, then Rent.com, Realtor.com or another page about it.
+const LISTING_SITE_ORDER = {zillow: 0, 'rent.com': 1, 'realtor.com': 2};
+function isListingPage(url, d){ const m = /^\s*(\d+)[a-z]?(?:[-\s]+\d+\/\d+)?\s+([a-z]+)/.exec((d.address || '').toLowerCase()); if(!m) return true; let u = url || ''; try { u = decodeURIComponent(u); } catch(e){} u = u.toLowerCase(); return new RegExp('(^|\\D)' + m[1] + '(\\D|$)').test(u) && u.includes(m[2]); }
+function listingUrl(d){ const pages = (d.sources || []).filter(x => x.url && x.site !== 'craigslist' && isListingPage(x.url, d)).sort((a, b) => (LISTING_SITE_ORDER[a.site] ?? 9) - (LISTING_SITE_ORDER[b.site] ?? 9)); return pages.length ? pages[0].url : (d.request_url || ((d.sources || []).find(x => x.url) || {}).url || null); }
+function siteName(url){ try { return new URL(url).hostname.replace(/^www\./, ''); } catch(e){ return 'the listing site'; } }
+function addrLink(d, inner){ const u = listingUrl(d); return u ? '<a class="addrlink" href="' + esc(u) + '" target="_blank" rel="noopener" title="Open the listing on ' + esc(siteName(u)) + '">' + inner + '</a>' : inner; }
 function title(d){ let t = d.address || d.request_url || d.id; if(d.unit) t += ' #' + d.unit; return t; }
 function pick(obj, keys){ const o = {}; keys.forEach(k => { if(obj[k] !== undefined) o[k] = obj[k]; }); return o; }
 function unknowns(d){ const m = []; const p = d.parking || {}, s = d.storage || {}, l = d.lease || {}, c = d.contact || {};
@@ -516,7 +540,7 @@ function mapDotCard(d, r){
   return (d.thumb ? '<img class="thumb" src="' + d.thumb + '" alt="">' : '') +
     '<div class="row"><b class="addr">' + (r ? '<span class="r">#' + r + '</span> ' : '') + esc(title(d)) + (d.city ? ' <span class="muted" style="font-weight:500">' + esc(d.city) + '</span>' : '') + '</b>' + ownerBadge(d) + '</div>' +
     '<div class="num"><b>' + money(d.price) + '</b>/mo' + (ce && ce.total ? ' · ≈ ' + money(ce.total) + ' with utilities' : '') + (d.score ? ' · score ' + Math.round(d.score) + '/100' : '') + '</div>' +
-    '<div class="specs">' + esc(specs(d)) + '</div>' + placeLine(d) +
+    '<div class="specs">' + esc(specs(d)) + '</div>' + marketLine(d) + placeLine(d) +
     '<div class="chips">' + chip('Parking', p.status, p.spots ? p.spots + ' spots' : p.detail) + chip('Storage', st.status, st.detail) + chip('Lease', l.status, l.evidence) + (d.lane ? '<span class="chip lane">' + esc(LANE_LABELS[d.lane]) + '</span>' : '') + '</div>' +
     (d.summary ? '<div class="small muted" style="margin-top:6px">' + esc(d.summary.length > 170 ? d.summary.slice(0, 167) + '…' : d.summary) + '</div>' : '') +
     '<div class="small muted" style="margin-top:6px">Click to open the full listing</div>';
@@ -536,9 +560,9 @@ function card(d, i){
   return '<article class="card' + (d.passed ? ' passed' : '') + '" data-id="' + esc(d.id) + '">' +
     '<div class="head">' + (d.thumb ? '<img class="thumb" src="' + d.thumb + '" alt="" loading="lazy">' : '') +
     '<div class="headmain"><div class="titlerow">' + (badge ? '<span class="rankpill num" title="Rank ' + badge + ' · score ' + Math.round(d.score||0) + ' out of 100">#' + badge + '<small>' + Math.round(d.score||0) + '/100</small></span>' : '') +
-    '<div class="addr">' + esc(d.address || 'Address pending') + (d.unit ? ' <span class="muted">#' + esc(d.unit) + '</span>' : '') + (d.city ? ' <span class="city">' + esc(d.city) + '</span>' : '') + '</div></div>' +
+    '<div class="addr">' + addrLink(d, esc(d.address || 'Address pending') + (d.unit ? ' <span class="muted">#' + esc(d.unit) + '</span>' : '')) + (d.city ? ' <span class="city">' + esc(d.city) + '</span>' : '') + newTag(d) + '</div></div>' +
     priceBlock(d) + '</div></div>' +
-    '<div class="specs">' + esc(specs(d)) + '</div>' + placeLine(d) +
+    '<div class="specs">' + esc(specs(d)) + '</div>' + marketLine(d) + placeLine(d) +
     '<div class="chips">' + chipsFor(d) + '</div>' +
     (d.summary ? '<div class="summary">' + esc(d.summary) + '</div>' : '') +
     contactLine(d) +
@@ -702,7 +726,7 @@ function renderDrawer(){
   const keep = drawerKeep(root); root.dataset.listing = d.id;
   root.innerHTML = '<div class="drawer-bg" data-close="1"></div><div class="drawer" role="dialog" aria-label="Listing details">' +
     '<button class="btn small close" data-close="1">Close ✕</button>' +
-    '<h2>' + esc(title(d)) + (d.city ? ' <span class="muted" style="font-weight:500;font-size:15px">' + esc(d.city) + '</span>' : '') + '</h2>' +
+    '<h2>' + addrLink(d, esc(title(d))) + (d.city ? ' <span class="muted" style="font-weight:500;font-size:15px">' + esc(d.city) + '</span>' : '') + newTag(d) + '</h2>' + marketLine(d) +
     (d.thumb ? '<img class="thumb" src="' + d.thumb + '" alt="">' : '') +
     '<div class="chips">' + chipsFor(d) + (d.rank && d.status === 'active' && !d.passed ? '<span class="chip">#' + d.rank + ' · score ' + Math.round(d.score||0) + '</span>' : '') + (d.status === 'dropped' ? '<span class="chip no">filtered out: ' + esc(d.drop_reason||'') + '</span>' : '') + (d.status === 'pending' ? '<span class="chip warn">agents are filling in the details</span>' : '') + '</div>' +
     (d.summary ? '<p class="summary" style="margin:8px 0 0">' + esc(d.summary) + '</p>' : '') +

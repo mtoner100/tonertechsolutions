@@ -42,7 +42,7 @@ nightly snapshot commits. To install the job on a new Mac: clone the repository 
 `~/Library/LaunchAgents/` and run `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.toner.site-snapshot.plist`.
 To refresh by hand: `python3 scripts/refresh_snapshot.py`.
 
-If the page itself changes on claude.ai, export the artifact's HTML and run `python3 scripts/patch_page.py <exported.html>`.
+When the dashboard changes (`~/agents/apartments/web/dashboard.html`), run `python3 scripts/deploy_site.py`: it wraps the dashboard, runs `patch_page.py`, commits `apartment-hunt/index.html`, pushes, waits until the site serves the new version and records it in `~/agents/apartments/data/site-build.json` so open pages offer a reload. `patch_page.py <exported.html>` alone still works for a claude.ai export. GitHub's Pages deployment occasionally fails with a server error (run #7 on 2026-10-30 did); the script's wait then times out, and an empty commit (`git commit --allow-empty -m 'Redeploy'` + push) re-triggers it.
 `scripts/build_data.py` is the older way to build the snapshot from an ArtifactData export; the hub is the source now.
 
 ## Add another page

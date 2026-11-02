@@ -66,7 +66,7 @@ def main():
     log(f"built apartment-hunt/index.html as {build} ({len(out) // 1024} KB)")
     if not push:
         return
-    git("add", "--", "apartment-hunt/index.html", "scripts")
+    git("add", "--", "apartment-hunt/index.html", "scripts", "README.md")
     if git("diff", "--cached", "--quiet", check=False).returncode == 0:
         log("nothing new to commit")
     else:
