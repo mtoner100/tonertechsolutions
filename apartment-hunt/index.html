@@ -105,6 +105,7 @@ a.addrlink:hover{color:var(--accent);text-decoration-color:currentColor}
 .muted{color:var(--muted)} .small{font-size:12px}
 .links{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12.5px}
 .links a{text-decoration:none;border-bottom:1px dotted var(--accent)}
+.links a.primary{font-weight:700;border-bottom-style:solid}
 .actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:auto;padding-top:8px}
 .confirm{font-size:12px;color:var(--warn)}
 .flags{font-size:12px;color:var(--bad)}
@@ -318,7 +319,7 @@ table.facts td:first-child{color:var(--muted);white-space:nowrap;width:120px}
 <script>
 (function(){
 'use strict';
-const BUILD = 'v31';  // bump on every publish; the page compares it with meta/build in the shared db and offers a reload when behind
+const BUILD = 'v32';  // bump on every publish; the page compares it with meta/build in the shared db and offers a reload when behind
 const LANES = ['watchlist','pursuing','touring','applying','lease'];
 const LANE_LABELS = {watchlist:'Watchlist', pursuing:'Pursuing', touring:'Touring', applying:'Applying', lease:'Lease'};
 const DEFAULT_ACTIONS = [['contacted','Contacted the landlord or agent'],['tour_scheduled','Tour scheduled'],['toured','Toured the place'],['applied','Application sent'],['lease_reviewed','Lease reviewed']];
@@ -368,9 +369,29 @@ function marketLine(d){
   return f != null ? '<div class="market muted" title="No site publishes when this one was listed">Listing date not published · found ' + (f === 0 ? 'today' : daysWord(f) + ' ago') + '</div>' : '';
 }
 // The property name links to the house's own listing: Zillow first, then Rent.com, Realtor.com or another page about it.
-const LISTING_SITE_ORDER = {zillow: 0, 'rent.com': 1, 'realtor.com': 2};
+// Links follow the same rules as tools/common.py: Zillow first, then one page per site about this house; search pages,
+// agent profiles and links the hub's checker found dead (s.dead) are left out.
+const ZILLOW_HOUSE = /zillow\.com\/(?:homedetails\/|b\/|apartments\/[^\/?#]+\/[^\/?#]+\/)/i;
+const TRULIA_ZPID = /trulia\.com\/home\/[^?#]*?-(\d{6,})\/?(?:[?#]|$)/i;
+const LINK_ORDER = ['zillow.com', 'rent.com', 'realtor.com', 'redfin.com', 'trulia.com', 'apartments.com'];
+function hostOf(url){ try { return new URL(url).hostname.toLowerCase().replace(/^www\./, ''); } catch(e){ return ''; } }
 function isListingPage(url, d){ const m = /^\s*(\d+)[a-z]?(?:[-\s]+\d+\/\d+)?\s+([a-z]+)/.exec((d.address || '').toLowerCase()); if(!m) return true; let u = url || ''; try { u = decodeURIComponent(u); } catch(e){} u = u.toLowerCase(); return new RegExp('(^|\\D)' + m[1] + '(\\D|$)').test(u) && u.includes(m[2]); }
-function listingUrl(d){ const pages = (d.sources || []).filter(x => x.url && x.site !== 'craigslist' && isListingPage(x.url, d)).sort((a, b) => (LISTING_SITE_ORDER[a.site] ?? 9) - (LISTING_SITE_ORDER[b.site] ?? 9)); return pages.length ? pages[0].url : (d.request_url || ((d.sources || []).find(x => x.url) || {}).url || null); }
+function zillowUrl(d){
+  const pages = (d.sources || []).filter(s => s.url && !s.dead && ZILLOW_HOUSE.test(s.url)).sort((a, b) => (isListingPage(a.url, d) ? 0 : 1) - (isListingPage(b.url, d) ? 0 : 1));
+  if(pages.length) return pages[0].url;
+  let zpid = d.zpid; if(!zpid) for(const s of d.sources || []){ const m = TRULIA_ZPID.exec(s.url || ''); if(m){ zpid = m[1]; break; } }
+  if(zpid) return 'https://www.zillow.com/homedetails/' + zpid + '_zpid/';
+  if(d.address && /^\d/.test(d.address)) return 'https://www.zillow.com/homes/' + encodeURIComponent((d.address + ', ' + (d.city || 'Newport') + ', RI' + (d.zip ? ' ' + d.zip : '')).trim().replace(/\s+/g, '-')).replace(/%2C/g, ',') + '_rb/';
+  return null;
+}
+function houseLinks(d){
+  const out = [], hosts = new Set(); const z = zillowUrl(d); if(z){ out.push(['zillow', z]); hosts.add('zillow.com'); }
+  const rank = u => { const h = hostOf(u); const i = LINK_ORDER.findIndex(x => h === x || h.endsWith('.' + x)); return i < 0 ? LINK_ORDER.length : i; };  // rent.com itself, not forrent.com
+  (d.sources || []).filter(s => s.url && !s.dead && s.site !== 'craigslist' && !hosts.has(hostOf(s.url)) && isListingPage(s.url, d)).sort((a, b) => rank(a.url) - rank(b.url))
+    .forEach(s => { const h = hostOf(s.url); if(h && !hosts.has(h)){ hosts.add(h); out.push([h, s.url]); } });
+  return out;
+}
+function listingUrl(d){ const l = houseLinks(d); return l.length ? l[0][1] : (d.request_url || ((d.sources || []).find(x => x.url) || {}).url || null); }
 function siteName(url){ try { return new URL(url).hostname.replace(/^www\./, ''); } catch(e){ return 'the listing site'; } }
 function addrLink(d, inner){ const u = listingUrl(d); return u ? '<a class="addrlink" href="' + esc(u) + '" target="_blank" rel="noopener" title="Open the listing on ' + esc(siteName(u)) + '">' + inner + '</a>' : inner; }
 function title(d){ let t = d.address || d.request_url || d.id; if(d.unit) t += ' #' + d.unit; return t; }
@@ -511,7 +532,7 @@ function priceChip(d){ const h = d.price_history || []; if(!h.length) return '';
 function chipsFor(d){ const p = d.parking||{}, s = d.storage||{}, l = d.lease||{}, o = d.outdoor||{}; const fb = d.feedback||{}; const mi = d.move_in||{}; return chip('Parking', p.status, p.spots ? p.spots + ' spots' + (p.detail ? ', ' + p.detail : '') : p.detail) + chip('Storage', s.status, s.detail) + chip('Lease', l.status, l.evidence) + furnishedChip(d) + priceChip(d) + (d.owner ? '<span class="chip lead">' + ownerBadge(d) + esc(d.owner) + ' leads</span>' : '') + (o.status === 'yes' ? chip('Outdoor', 'yes', o.detail) : '') + (d.whole_home === true ? '<span class="chip yes">whole house</span>' : '') + (mi.fit === 'too late' || mi.fit === 'late' ? '<span class="chip warn">move-in ' + esc(mi.fit) + '</span>' : '') + (fb.verdict ? '<span class="chip ' + (fb.verdict === 'up' ? 'yes' : 'no') + '" title="' + esc(fb.text||'') + '">' + (fb.verdict === 'up' ? 'you liked it' : fb.verdict === 'down' ? 'you disliked it' : 'not interested') + '</span>' : '') + (d.lane ? '<span class="chip lane">' + esc(LANE_LABELS[d.lane]) + '</span>' : '') + (d.passed ? '<span class="chip">passed</span>' : ''); }
 function contactLine(d){ const c = d.contact || {}; const who = [c.name, c.company].filter(Boolean).join(' · '); if(!who && !c.phone && !c.email) return '<div class="contact muted">Contact not listed yet</div>';
   return '<div class="contact">' + (who ? '<span>' + esc(who) + '</span>' : '') + (c.phone ? '<span class="pair"><b>' + esc(c.phone) + '</b><button class="btn small quiet" data-copy="' + esc(c.phone) + '">copy</button></span>' : '') + (c.email ? '<span class="pair">' + esc(c.email) + '<button class="btn small quiet" data-copy="' + esc(c.email) + '">copy</button></span>' : '') + '</div>'; }
-function linksFor(d){ const q = d.address ? encodeURIComponent((d.address + (d.unit ? ' #' + d.unit : '') + ', ' + (d.city || 'Newport') + ' RI')) : null; return '<div class="links">' + (d.sources||[]).map(s => '<a href="' + esc(s.url) + '" target="_blank" rel="noopener">' + esc(s.site || 'link') + '</a>').join('') + (q ? '<a href="https://maps.apple.com/?q=' + q + '" target="_blank" rel="noopener">map</a>' : '') + '</div>'; }
+function linksFor(d){ const q = d.address ? encodeURIComponent((d.address + (d.unit ? ' #' + d.unit : '') + ', ' + (d.city || 'Newport') + ' RI')) : null; return '<div class="links">' + houseLinks(d).map(([label, url], i) => '<a href="' + esc(url) + '" target="_blank" rel="noopener"' + (i === 0 && label === 'zillow' ? ' class="primary"' : '') + '>' + esc(label === 'zillow' ? 'Zillow' : label) + '</a>').join('') + (q ? '<a href="https://maps.apple.com/?q=' + q + '" target="_blank" rel="noopener">map</a>' : '') + '</div>'; }
 function mercY(lat){ return Math.log(Math.tan(Math.PI/4 + lat*Math.PI/360)); }
 function mapPct(lat, lng){ const b = MAP_BASE.bbox; return [(lng - b.west)/(b.east - b.west)*100, (mercY(b.north) - mercY(lat))/(mercY(b.north) - mercY(b.south))*100]; }
 function renderMap(){
