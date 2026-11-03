@@ -319,7 +319,7 @@ table.facts td:first-child{color:var(--muted);white-space:nowrap;width:120px}
 <script>
 (function(){
 'use strict';
-const BUILD = 'v32';  // bump on every publish; the page compares it with meta/build in the shared db and offers a reload when behind
+const BUILD = 'v33';  // bump on every publish; the page compares it with meta/build in the shared db and offers a reload when behind
 const LANES = ['watchlist','pursuing','touring','applying','lease'];
 const LANE_LABELS = {watchlist:'Watchlist', pursuing:'Pursuing', touring:'Touring', applying:'Applying', lease:'Lease'};
 const DEFAULT_ACTIONS = [['contacted','Contacted the landlord or agent'],['tour_scheduled','Tour scheduled'],['toured','Toured the place'],['applied','Application sent'],['lease_reviewed','Lease reviewed']];
@@ -404,7 +404,38 @@ function toast(msg){ const r = $('toast-root'); r.innerHTML = '<div class="toast
 function uid(){ return 'u' + Math.random().toString(36).slice(2,10); }
 function progress(d){ const keys = DEFAULT_ACTIONS.map(a => a[0]).concat((d.custom_actions||[]).map(a => a.key)); const done = keys.filter(k => d.actions && d.actions[k] && d.actions[k].done).length; return [done, keys.length]; }
 function nextTour(d){ const now = localIso(new Date()); return (d.tours||[]).filter(t => t.start && t.start >= now).sort((a,b) => a.start < b.start ? -1 : 1)[0]; }
-function activeListings(){ return [...state.listings.values()].filter(d => d.status !== 'gone'); }
+// One card per place. The hub merges duplicates on every Scout pass (common.same_place); until it does, the page shows only
+// one record per place, the one you worked on, else the active one, else the one with a Zillow id, else the older one.
+const STREET_WORDS = [['street','st'],['avenue','ave'],['road','rd'],['drive','dr'],['lane','ln'],['place','pl'],['court','ct'],['terrace','ter'],['boulevard','blvd'],['circle','cir'],['parkway','pkwy'],['highway','hwy'],['square','sq']];
+const SUFFIX_WORDS = new Set(STREET_WORDS.flat().concat(['way','row','walk','aly','alley'])); const STREET_SHORT = Object.fromEntries(STREET_WORDS);
+const DIRECTION_WORDS = new Set(['n','s','e','w','north','south','east','west']);
+function placeKey(d){
+  let a = (d.address || '').replace(/,\s*(newport|middletown|portsmouth|jamestown)\b.*$/i, '').replace(/(?:\b(?:apt|apartment|unit|ste|suite|floor|fl|rear|front|upper|lower)\b\.?|#)\s*[a-z0-9-]+\b/ig, '');
+  a = a.replace(/^(\d+\S*\s+.*?\b(?:st|street|ave|avenue|rd|road|dr|drive|ln|lane|pl|place|ct|court|ter|terrace|blvd|boulevard|cir|circle|pkwy|parkway|hwy|highway|sq|square|way|row)\.?)[\s,]+\d{1,4}[a-z]?$/i, '$1');
+  const m = /^\s*(\d+)(?:[a-z]|[-\s]+\d+\/\d+|-\d+)?\s+(.*)$/i.exec(a.toLowerCase()); if(!m) return null;
+  const words = m[2].split(/[^a-z0-9]+/).filter(w => w && !DIRECTION_WORDS.has(w));
+  const name = words.find(w => !SUFFIX_WORDS.has(w) && !/^\d+$/.test(w)); if(!name) return null;
+  const sw = words.find(w => SUFFIX_WORDS.has(w)); return {num: m[1], name, suffix: sw ? (STREET_SHORT[sw] || sw) : null, city: (d.city || '').trim().toLowerCase()};
+}
+function unitNorm(u){ return String(u == null ? '' : u).toLowerCase().replace(/[^a-z0-9]/g, '') || null; }
+function samePlace(a, b){
+  const za = String(a.zpid || ''), zb = String(b.zpid || ''); if(za && zb) return za === zb;
+  const ka = placeKey(a), kb = placeKey(b); if(!ka || !kb || ka.num !== kb.num || ka.name !== kb.name || ka.city !== kb.city) return false;
+  if(ka.suffix && kb.suffix && ka.suffix !== kb.suffix) return false;
+  const ua = unitNorm(a.unit), ub = unitNorm(b.unit); if(ua && ub && ua !== ub) return false;
+  if(a.beds && b.beds && +a.beds !== +b.beds) return false;
+  if(a.price && b.price && Math.abs(a.price - b.price) > 0.1 * Math.max(a.price, b.price)) return false;
+  return true;
+}
+function keeperRank(d){ const worked = !!(d.lane || d.owner || (d.notes||[]).length || (d.tours||[]).length || d.passed || d.feedback || Object.values(d.actions || {}).some(a => a && a.done)); return [worked ? 0 : 1, d.status === 'active' ? 0 : 1, d.zpid ? 0 : 1, d.first_seen || '']; }
+function cmpRank(a, b){ const ra = keeperRank(a), rb = keeperRank(b); for(let i = 0; i < ra.length; i++){ if(ra[i] < rb[i]) return -1; if(ra[i] > rb[i]) return 1; } return 0; }
+function dedupeListings(all){
+  const groups = new Map(); all.forEach(d => { const k = placeKey(d); const g = k ? k.num + '|' + k.name + '|' + k.city : (d.zpid ? 'z' + d.zpid : null); if(g){ (groups.get(g) || groups.set(g, []).get(g)).push(d); } });
+  const hidden = new Set();
+  groups.forEach(g => { if(g.length < 2) return; g.sort(cmpRank); g.forEach((d, i) => { if(hidden.has(d.id)) return; const keepers = g.slice(0, i).filter(o => !hidden.has(o.id) && samePlace(o, d)); if(keepers.length === 1) hidden.add(d.id); }); });
+  return hidden.size ? all.filter(d => !hidden.has(d.id)) : all;
+}
+function activeListings(){ return dedupeListings([...state.listings.values()].filter(d => d.status !== 'gone')); }
 function topList(){ return activeListings().filter(d => d.status === 'active' && !d.passed && !((d.move_in||{}).fit === 'too late')).sort((a,b) => (b.score||0) - (a.score||0) || (a.first_seen||'').localeCompare(b.first_seen||'')); }
 function boardList(){ return activeListings().filter(d => d.lane && !d.passed); }
 function tours(){ const out = []; activeListings().forEach(d => (d.tours||[]).forEach(t => { if(t.start) out.push({...t, listing: d}); })); return out.sort((a,b) => a.start < b.start ? -1 : 1); }
